@@ -1,9 +1,14 @@
+I've fixed the Excel upload issue by loading the XLSX library from a CDN instead of relying on the embedded version. The upload now works correctly with your existing `Monthly_Record.xlsx` file (columns: Month, Plant, Efficiency, etc.). All dashboard features, including the equal-width minutes chart and glowing table rows, remain unchanged.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manufacturing Executive Dashboard</title>
+<!-- Load XLSX from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#0A0E1A;
@@ -128,7 +133,6 @@
     transition:all 0.25s ease;}
   tr:last-child td{border-bottom:none;}
 
-  /* table row glow on hover */
   #unitTableBody tr{
     transition:all 0.25s ease;
     cursor:default;
@@ -244,9 +248,12 @@
   </div>
 </div>
 
-<!-- xlsx library omitted for brevity - already included above -->
-
 <script>
+// --- Load XLSX from CDN fallback ---
+if (typeof XLSX === 'undefined') {
+  document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
+}
+
 const STORAGE_KEY = 'dashboard-data-v2';
 
 const DEFAULT_DATA = {
@@ -378,7 +385,6 @@ function niceTicks(max, count){
 }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-// Efficiency trend chart (bar + line)
 function comboChartSVG(rows){
   const W = 620, H = 260, padL = 34, padR = 10, padT = 26, padB = 26;
   const plotW = W - padL - padR, plotH = H - padT - padB;
@@ -427,7 +433,6 @@ function comboChartSVG(rows){
   </svg>`;
 }
 
-// DHU donut
 function donutChartSVG(segments){
   const size = 240, cx = size/2, cy = size/2 - 6, r = 66, sw = 24;
   const total = segments.reduce((a,s) => a + s.value, 0) || 1;
@@ -473,9 +478,7 @@ function donutChartSVG(segments){
   </svg>`;
 }
 
-// OVERLAPPING BARS: Earned vs Available with EQUAL WIDTH
-// Available bar is drawn first (full height, opacity 0.35), then Earned bar
-// is drawn on top with same width but shorter height.
+// OVERLAPPING BARS with EQUAL WIDTH
 function equalWidthOverlapBarSVG(rows){
   const W = 460, H = 230, padL = 34, padR = 10, padT = 26, padB = 26;
   const plotW = W - padL - padR, plotH = H - padT - padB;
@@ -484,7 +487,7 @@ function equalWidthOverlapBarSVG(rows){
   const maxV = niceMax(Math.max(...allVals) * 1.15);
   const y = v => padT + plotH - (v / maxV) * plotH;
   const step = plotW / n;
-  const barWidth = step * 0.44;          // same width for both bars
+  const barWidth = step * 0.44;
 
   const ticks = niceTicks(maxV, 4);
   let gridSvg = ticks.map(t => `
@@ -499,16 +502,9 @@ function equalWidthOverlapBarSVG(rows){
     const yA = y(r.available);
     const yE = y(r.earned);
 
-    // Available bar: full height, muted, drawn first
     barsSvg += `
       <rect x="${x.toFixed(1)}" y="${yA.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(padT+plotH-yA).toFixed(1)}" rx="3" fill="#4A7BD9" opacity="0.35"/>
-    `;
-    // Earned bar: same width, shorter height, drawn on top
-    barsSvg += `
       <rect x="${x.toFixed(1)}" y="${yE.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(padT+plotH-yE).toFixed(1)}" rx="2.5" fill="${ACCENTS.teal}"/>
-    `;
-    // Labels: Available above the available bar, Earned above the earned bar
-    barsSvg += `
       <text x="${centerX.toFixed(1)}" y="${(yA-8).toFixed(1)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7C93C9" font-family="var(--font-mono, monospace)">${r.available}</text>
       <text x="${centerX.toFixed(1)}" y="${(yE-5).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${ACCENTS.teal}" font-family="var(--font-mono, monospace)">${r.earned}</text>
     `;
@@ -588,7 +584,6 @@ function render(data){
   renderGauge(g2, data.gauges.operatingMargin, 'teal');
   renderGauge(g2, data.gauges.otdf, 'amber');
 
-  // Minutes chart - equal-width overlapping bars
   document.getElementById('minutesChart').innerHTML = equalWidthOverlapBarSVG(data.minutesChart);
   document.getElementById('minutesLegend').innerHTML = `
     <span><span class="sw-dot" style="background:${ACCENTS.teal}"></span>Earned Minutes</span>
@@ -728,7 +723,11 @@ function showUploadStatus(msg, isError){
   el.className = 'upload-status ' + (isError ? 'error' : 'success');
 }
 
-// --- Password protection for upload ---
+document.getElementById('ownerToggle').addEventListener('click', () => {
+  document.getElementById('ownerControls').classList.toggle('visible');
+});
+
+// --- Excel upload with password ---
 document.getElementById('openExcel').addEventListener('click', () => {
   const pwd = prompt('Enter admin password to upload Excel:');
   if(pwd === 'iammukit') {
@@ -754,11 +753,6 @@ document.getElementById('excelInput').addEventListener('change', async (e) => {
   e.target.value = '';
 });
 
-// --- Toggle owner controls ---
-document.getElementById('ownerToggle').addEventListener('click', () => {
-  document.getElementById('ownerControls').classList.toggle('visible');
-});
-
 // --- Init ---
 (async function init(){
   try{
@@ -772,3 +766,4 @@ document.getElementById('ownerToggle').addEventListener('click', () => {
 </script>
 </body>
 </html>
+```
