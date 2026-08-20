@@ -13,13 +13,7 @@ app.add_middleware(  # type: ignore
     allow_headers=["*"],
 )
 
-MONGO_URI = os.getenv("MONGO_URI")
-
-# ---------- DEBUG: Print the actual URI being used ----------
-if MONGO_URI:
-    print(f"DEBUG: MONGO_URI starts with: {MONGO_URI[:50]}...")
-else:
-    print("DEBUG: MONGO_URI is EMPTY!")
+MONGO_URI = "mongodb+srv://dgl_admin:startingmongo51402@cluster0.sqybkjv.mongodb.net/?appName=Cluster0"
 
 
 # ------------------------------------------------------------
