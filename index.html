@@ -251,7 +251,23 @@ if (typeof XLSX === 'undefined') {
   document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
 }
 
+// ============================================================
+//  FIXED: Backend API endpoint and data loader
+// ============================================================
+const API_BASE = 'https://manufacturing-dashboard-for-rmg.onrender.com';
 const STORAGE_KEY = 'dashboard-data-v2';
+
+// Helper to check if data matches the dashboard schema
+function isDashboardSchema(data) {
+  return data &&
+    data.header &&
+    data.kpis &&
+    Array.isArray(data.efficiencyTrend) &&
+    data.gauges &&
+    Array.isArray(data.dhu) &&
+    Array.isArray(data.minutesChart) &&
+    Array.isArray(data.units);
+}
 
 const DEFAULT_DATA = {
   header: { company: "MANUFACTURING GROUP", view: "Consolidated View (5 Units)", month: "Jan – Apr 2026 (YTD)" },
@@ -300,21 +316,52 @@ const ACCENTS = { green: '#3ED598', amber: '#F5B84D', teal: '#2FD9C4', violet: '
 
 let currentData = null;
 
-async function loadData(){
-  try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value) return JSON.parse(res.value);
-  }catch(e){ /* no saved data yet */ }
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(DEFAULT_DATA), false);
-  }catch(e){ /* storage not active until published */ }
-  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+// ============================================================
+//  FIXED: loadData() – now actually fetches from the backend
+// ============================================================
+async function loadData() {
+  // Try to fetch live data from the backend
+  try {
+    const response = await fetch(`${API_BASE}/dashboard-data`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    // The backend might return data directly or wrapped in a 'data' field
+    const liveData = isDashboardSchema(payload) 
+      ? payload 
+      : (payload && isDashboardSchema(payload.data) ? payload.data : null);
+    if (liveData) {
+      // Save to localStorage for offline fallback
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(liveData));
+      } catch (e) { /* ignore */ }
+      return liveData;
+    }
+    throw new Error('API response does not match dashboard schema');
+  } catch (e) {
+    console.warn('Live data unavailable, trying stored data:', e.message);
+    // Fallback to localStorage
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (isDashboardSchema(parsed)) return parsed;
+      }
+    } catch (e2) { /* ignore */ }
+    // Final fallback: default hardcoded data
+    console.warn('Using hardcoded default data');
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
 }
 
-async function saveData(data){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
-  }catch(e){ console.warn('Could not persist data:', e); }
+// ============================================================
+//  FIXED: saveData – now uses localStorage (no window.storage)
+// ============================================================
+async function saveData(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Could not persist data:', e);
+  }
 }
 
 // --- GAUGE (SVG) ---

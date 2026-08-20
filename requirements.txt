@@ -1,4 +1,5 @@
 fastapi
 uvicorn
-pymongo>=4.7.0
+pymongo>=4.9,<5
 python-dotenv
+certifi>=2024.2.2
