@@ -13,7 +13,7 @@ app.add_middleware(  # type: ignore
     allow_headers=["*"],
 )
 
-MONGO_URI = "mongodb+srv://dgl_admin:startingmongo51402@cluster0.sqybkjv.mongodb.net/?appName=Cluster0"
+MONGO_URI = "mongodb://dgl_admin:startingmongo51402@ac-vlam9jo-shard-00-00.sqybkjv.mongodb.net:27017,ac-vlam9jo-shard-00-01.sqybkjv.mongodb.net:27017,ac-vlam9jo-shard-00-02.sqybkjv.mongodb.net:27017/?ssl=true&replicaSet=atlas-122kt6-shard-0&authSource=admin&appName=Cluster0"
 print("DEBUG: Using hardcoded MongoDB SRV URI")
 
 
@@ -28,7 +28,8 @@ def get_db():
             MONGO_URI,
             serverSelectionTimeoutMS=5000,
             tls=True,
-            tlsAllowInvalidCertificates=True
+            tlsAllowInvalidCertificates=True,
+            tlsAllowInvalidHostnames=True
         )
         client.admin.command('ping')
         print("MongoDB connection successful!")
