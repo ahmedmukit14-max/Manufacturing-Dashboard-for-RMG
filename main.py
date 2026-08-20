@@ -5,10 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# ------------------------------------------------
-# FIX: Add CORS Middleware with type ignore comments
-# to silence PyCharm's false-positive warnings.
-# ------------------------------------------------
 app.add_middleware(  # type: ignore
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,23 +15,26 @@ app.add_middleware(  # type: ignore
 
 MONGO_URI = os.getenv("MONGO_URI")
 
+# ---------- DEBUG: Print the actual URI being used ----------
+if MONGO_URI:
+    print(f"DEBUG: MONGO_URI starts with: {MONGO_URI[:50]}...")
+else:
+    print("DEBUG: MONGO_URI is EMPTY!")
+
+
+# ------------------------------------------------------------
 
 def get_db():
     if not MONGO_URI:
         print("ERROR: MONGO_URI is not set in environment variables.")
         return None
     try:
-        # ------------------------------------------------
-        # FIX: Force TLS with relaxed certificate validation
-        # to fix the SSL handshake error on Render free tier.
-        # ------------------------------------------------
         client = pymongo.MongoClient(
             MONGO_URI,
             serverSelectionTimeoutMS=5000,
             tls=True,
             tlsAllowInvalidCertificates=True
         )
-        # Quick connection test
         client.admin.command('ping')
         print("MongoDB connection successful!")
         return client["dgl_db"]
