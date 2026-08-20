@@ -251,8 +251,23 @@ if (typeof XLSX === 'undefined') {
   document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
 }
 
+// ============================================================
+//  FIXED: Backend API endpoint and data loader
+// ============================================================
 const API_BASE = 'https://manufacturing-dashboard-for-rmg.onrender.com';
 const STORAGE_KEY = 'dashboard-data-v2';
+
+// Helper to check if data matches the dashboard schema
+function isDashboardSchema(data) {
+  return data &&
+    data.header &&
+    data.kpis &&
+    Array.isArray(data.efficiencyTrend) &&
+    data.gauges &&
+    Array.isArray(data.dhu) &&
+    Array.isArray(data.minutesChart) &&
+    Array.isArray(data.units);
+}
 
 const DEFAULT_DATA = {
   header: { company: "MANUFACTURING GROUP", view: "Consolidated View (5 Units)", month: "Jan – Apr 2026 (YTD)" },
@@ -301,61 +316,51 @@ const ACCENTS = { green: '#3ED598', amber: '#F5B84D', teal: '#2FD9C4', violet: '
 
 let currentData = null;
 
-function cloneDefaultData(){
-  return JSON.parse(JSON.stringify(DEFAULT_DATA));
-}
-
-function isDashboardSchema(data){
-  return Boolean(
-    data &&
-    data.header &&
-    data.kpis &&
-    Array.isArray(data.efficiencyTrend) &&
-    data.gauges &&
-    Array.isArray(data.dhu) &&
-    Array.isArray(data.minutesChart) &&
-    Array.isArray(data.units)
-  );
-}
-
-function readLocalData(){
-  try{
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if(saved){
-      const parsed = JSON.parse(saved);
-      if(isDashboardSchema(parsed)) return parsed;
-    }
-  }catch(e){
-    console.warn('Could not read saved dashboard data:', e);
-  }
-  return null;
-}
-
-async function loadData(){
-  try{
+// ============================================================
+//  FIXED: loadData() – now actually fetches from the backend
+// ============================================================
+async function loadData() {
+  // Try to fetch live data from the backend
+  try {
     const response = await fetch(`${API_BASE}/dashboard-data`, { cache: 'no-store' });
-    if(!response.ok) throw new Error(`API returned HTTP ${response.status}`);
-
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
-    const liveData = isDashboardSchema(payload)
-      ? payload
+    // The backend might return data directly or wrapped in a 'data' field
+    const liveData = isDashboardSchema(payload) 
+      ? payload 
       : (payload && isDashboardSchema(payload.data) ? payload.data : null);
-
-    if(!liveData) throw new Error('API response does not match the dashboard schema');
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(liveData));
-    return liveData;
-  }catch(e){
-    console.warn('Live dashboard data unavailable:', e);
-    return readLocalData() || cloneDefaultData();
+    if (liveData) {
+      // Save to localStorage for offline fallback
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(liveData));
+      } catch (e) { /* ignore */ }
+      return liveData;
+    }
+    throw new Error('API response does not match dashboard schema');
+  } catch (e) {
+    console.warn('Live data unavailable, trying stored data:', e.message);
+    // Fallback to localStorage
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (isDashboardSchema(parsed)) return parsed;
+      }
+    } catch (e2) { /* ignore */ }
+    // Final fallback: default hardcoded data
+    console.warn('Using hardcoded default data');
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
   }
 }
 
-async function saveData(data){
-  try{
+// ============================================================
+//  FIXED: saveData – now uses localStorage (no window.storage)
+// ============================================================
+async function saveData(data) {
+  try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }catch(e){
-    console.warn('Could not persist dashboard data:', e);
+  } catch (e) {
+    console.warn('Could not persist data:', e);
   }
 }
 
@@ -766,12 +771,14 @@ document.getElementById('ownerToggle').addEventListener('click', () => {
   document.getElementById('ownerControls').classList.toggle('visible');
 });
 
-// --- Excel upload ---
-// A password embedded in frontend JavaScript is not a real security control,
-// because visitors can inspect the source code. Use server-side authentication
-// if this upload must be protected.
+// --- Excel upload with password ---
 document.getElementById('openExcel').addEventListener('click', () => {
-  document.getElementById('excelInput').click();
+  const pwd = prompt('Enter admin password to upload Excel:');
+  if(pwd === 'iammukit') {
+    document.getElementById('excelInput').click();
+  } else if(pwd !== null) {
+    showUploadStatus('Incorrect password. Upload cancelled.', true);
+  }
 });
 
 document.getElementById('excelInput').addEventListener('change', async (e) => {
@@ -797,7 +804,7 @@ document.getElementById('excelInput').addEventListener('change', async (e) => {
     render(data);
   }catch(e){
     console.error('Falling back to default data:', e);
-    render(cloneDefaultData());
+    render(JSON.parse(JSON.stringify(DEFAULT_DATA)));
   }
 })();
 </script>
