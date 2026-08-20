@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manufacturing Executive Dashboard</title>
+<!-- Load XLSX from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0E1A;
+    --panel:#111726;
+    --panel-2:#161D2F;
+    --line:#232B41;
+    --ink:#E7ECF7;
+    --ink-dim:#8B93AA;
+    --teal:#2FD9C4;
+    --amber:#F5B84D;
+    --violet:#8C7CF6;
+    --rose:#F2607A;
+    --green:#3ED598;
+    --font-display: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(140,124,246,0.08), transparent 40%),
+      radial-gradient(circle at 90% 10%, rgba(47,217,196,0.07), transparent 45%),
+      var(--bg);
+    padding:20px;
+    min-height:100vh;
+  }
+  .wrap{max-width:1580px;margin:0 auto;}
+
+  .header{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line);border-radius:14px;
+    padding:18px 22px;margin-bottom:16px;
+  }
+  .header-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .header-title .brand{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:0.5px;color:var(--teal);}
+  .header-title .sub{font-family:var(--font-display);font-weight:600;font-size:20px;color:var(--ink);}
+  .header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .pill{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+    padding:8px 14px;font-size:12.5px;color:var(--ink-dim);font-family:var(--font-mono);
+  }
+  .pill b{color:var(--ink);font-weight:600;}
+  .edit-btn{
+    background:linear-gradient(135deg, var(--teal), #21A594);
+    color:#04211D;border:none;border-radius:9px;padding:9px 16px;
+    font-family:var(--font-display);font-weight:600;font-size:13px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .edit-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(47,217,196,0.25);}
+  .edit-btn.admin-btn{background:linear-gradient(135deg, var(--violet), #6656D9); color:#12102B;}
+  .edit-btn.admin-btn:hover{box-shadow:0 6px 18px rgba(140,124,246,0.3);}
+  .owner-controls{display:none;gap:10px;align-items:center;flex-wrap:wrap;}
+  .owner-controls.visible{display:flex;}
+  .gear-btn{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+    width:34px;height:34px;color:var(--ink-dim);font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:all .15s ease;opacity:0.55;
+  }
+  .gear-btn:hover{opacity:1;color:var(--ink);transform:rotate(35deg);}
+  .admin-label{font-size:10.5px;color:var(--ink-dim);font-family:var(--font-mono);letter-spacing:0.3px;opacity:0.7;margin-top:2px;}
+
+  .accent-bar{height:3px;border-radius:3px;margin-bottom:16px;
+    background:linear-gradient(90deg, var(--violet), var(--teal), var(--amber), var(--rose));
+    opacity:0.7;
+  }
+
+  .kpi-row{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:16px;}
+  @media(max-width:1400px){.kpi-row{grid-template-columns:repeat(4,1fr);}}
+  @media(max-width:760px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
+  .kpi{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;
+    position:relative;overflow:hidden;transition:box-shadow .2s ease, transform .2s ease, border-color .2s ease;
+  }
+  .kpi:hover{
+    transform:translateY(-2px);
+    border-color:color-mix(in srgb, var(--accent, var(--teal)) 55%, var(--line));
+    box-shadow:0 0 26px color-mix(in srgb, var(--accent, var(--teal)) 30%, transparent), 0 6px 16px rgba(0,0,0,0.3);
+  }
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2.5px;background:var(--accent, var(--teal));}
+  .kpi .label{font-size:10.5px;letter-spacing:0.6px;text-transform:uppercase;color:var(--ink-dim);font-weight:600;margin-bottom:8px;}
+  .kpi .value{font-family:var(--font-display);font-weight:700;font-size:26px;color:var(--accent, var(--teal));line-height:1;margin-bottom:8px;}
+  .kpi .meta{font-size:11px;color:var(--ink-dim);line-height:1.6;font-family:var(--font-mono);}
+  .kpi.hero .value{font-size:28px;}
+  .kpi.hero{display:flex;flex-direction:column;justify-content:center;}
+  .kpi.hero .label{margin-bottom:6px;}
+
+  .main-grid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:16px;}
+  @media(max-width:1300px){.main-grid{grid-template-columns:1fr;}}
+  .col{display:flex;flex-direction:column;gap:16px;}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;
+  }
+  .card-title{font-family:var(--font-display);font-weight:600;font-size:14.5px;color:var(--ink);margin:0 0 4px;}
+  .card-sub{font-size:11.5px;color:var(--ink-dim);margin:0 0 14px;}
+
+  .chart-box{position:relative;height:230px;transition:box-shadow .2s ease;border-radius:10px;}
+  .chart-box.tall{height:270px;}
+  .chart-box:hover{box-shadow:0 0 30px rgba(47,217,196,0.16);}
+  .chart-box svg{width:100%;height:100%;display:block;}
+  .chart-legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:11px;color:var(--ink-dim);}
+  .chart-legend .sw-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+  .chart-legend .sw-line{display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:2px;}
+
+  .gauge-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .gauge-cell{text-align:center;border-radius:12px;padding:8px 4px;transition:box-shadow .2s ease, transform .2s ease;}
+  .gauge-cell:hover{
+    transform:translateY(-2px);
+    box-shadow:0 0 26px color-mix(in srgb, var(--accent, var(--teal)) 32%, transparent);
+  }
+  .gauge-cell .g-label{font-size:11.5px;color:var(--ink-dim);font-weight:600;margin-bottom:6px;min-height:28px;}
+  .gauge-cell svg{width:100%;max-width:180px;height:auto;}
+  .gauge-value{font-family:var(--font-display);font-weight:700;font-size:22px;}
+  .gauge-target{font-size:10.5px;color:var(--ink-dim);font-family:var(--font-mono);}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--ink-dim);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:0.4px;
+    padding:8px 8px;border-bottom:1px solid var(--line);}
+  td{padding:8px 8px;border-bottom:1px solid var(--line);color:var(--ink);font-family:var(--font-mono);
+    transition:all 0.25s ease;}
+  tr:last-child td{border-bottom:none;}
+
+  #unitTableBody tr{
+    transition:all 0.25s ease;
+    cursor:default;
+  }
+  #unitTableBody tr:hover td{
+    background:rgba(47,217,196,0.07);
+    box-shadow:0 0 24px rgba(47,217,196,0.12), inset 0 0 24px rgba(47,217,196,0.04);
+    border-bottom-color:rgba(47,217,196,0.15);
+  }
+  #unitTableBody tr:hover td:first-child{
+    border-radius:6px 0 0 6px;
+    box-shadow:0 0 24px rgba(47,217,196,0.12), inset 0 0 24px rgba(47,217,196,0.04), -4px 0 12px rgba(47,217,196,0.08);
+  }
+  #unitTableBody tr:hover td:last-child{
+    border-radius:0 6px 6px 0;
+    box-shadow:0 0 24px rgba(47,217,196,0.12), inset 0 0 24px rgba(47,217,196,0.04), 4px 0 12px rgba(47,217,196,0.08);
+  }
+  #unitTableBody tr:hover td:first-child:last-child{
+    border-radius:6px;
+    box-shadow:0 0 30px rgba(47,217,196,0.15), inset 0 0 30px rgba(47,217,196,0.05);
+  }
+
+  .chip{display:inline-block;padding:3px 9px;border-radius:20px;font-weight:600;font-size:11.5px;min-width:44px;text-align:center;}
+  .chip.green{background:rgba(62,213,152,0.15);color:var(--green);}
+  .chip.amber{background:rgba(245,184,77,0.15);color:var(--amber);}
+  .chip.rose{background:rgba(242,96,122,0.15);color:var(--rose);}
+
+  .legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--ink-dim);}
+  .legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
+
+  .upload-status{
+    display:none; font-size:12px; font-family:var(--font-mono);
+    padding:8px 14px; border-radius:9px; margin-bottom:14px;
+  }
+  .upload-status.success{background:rgba(62,213,152,0.12);color:var(--green);border:1px solid rgba(62,213,152,0.3);}
+  .upload-status.error{background:rgba(242,96,122,0.12);color:var(--rose);border:1px solid rgba(242,96,122,0.3);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-title">
+      <span class="brand" id="hdrBrand">DEKKOISHO GROUP MANUFACTURING</span>
+      <span class="sub">— Executive Performance Dashboard</span>
+    </div>
+    <div class="header-right">
+      <div class="pill" id="hdrView">Consolidated View</div>
+      <div class="pill" id="hdrMonth">Month: —</div>
+      <span id="ownerControls" class="owner-controls">
+        <div style="display:flex;flex-direction:column;align-items:flex-start;">
+          <button class="edit-btn admin-btn" id="openExcel">⇪ Upload Excel</button>
+          <span class="admin-label">For admin use</span>
+        </div>
+      </span>
+      <button class="gear-btn" id="ownerToggle" title="Owner controls">⚙</button>
+    </div>
+  </div>
+  <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none;" />
+
+  <div class="accent-bar"></div>
+  <div id="uploadStatus" class="upload-status"></div>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="main-grid">
+    <div class="col">
+      <div class="card">
+        <div class="card-title">Efficiency Trend</div>
+        <div class="card-sub">Monthly vs. running YTD average, against target line</div>
+        <div class="chart-box tall" id="trendChart"></div>
+        <div class="chart-legend" id="trendLegend"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Plant DHU% — Defects per Hundred Units</div>
+        <div class="card-sub">Breakdown by production stage</div>
+        <div class="chart-box" id="dhuChart"></div>
+        <div class="legend-row" id="dhuLegend"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="gauge-pair" id="gaugeRow1"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Margin &amp; Fulfillment</div>
+        <div class="card-sub">Operating margin (EBITDA) &amp; on-time-in-full delivery</div>
+        <div class="gauge-pair" id="gaugeRow2"></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="card-title">Earned vs. Available Minutes</div>
+        <div class="card-sub">Monthly capacity utilization, all units (millions of minutes)</div>
+        <div class="chart-box" id="minutesChart"></div>
+        <div class="chart-legend" id="minutesLegend"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Unit Performance Breakdown</div>
+        <div class="card-sub">Per-unit efficiency, defects &amp; delivery</div>
+        <div style="overflow-x:auto;">
+          <table id="unitTable">
+            <thead>
+              <tr><th>Unit</th><th>Style Chg/Line</th><th>Prod. Share</th><th>Efficiency</th><th>DHU%</th><th>OTDF%</th></tr>
+            </thead>
+            <tbody id="unitTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- Load XLSX from CDN fallback ---
+if (typeof XLSX === 'undefined') {
+  document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');
+}
+
+const STORAGE_KEY = 'dashboard-data-v2';
+
+const DEFAULT_DATA = {
+  header: { company: "MANUFACTURING GROUP", view: "Consolidated View (5 Units)", month: "Jan – Apr 2026 (YTD)" },
+  kpis: {
+    efficiency:    { label: "Efficiency %",           value: 57.6, unit: "%", lastMonth: 59.9, extra: "YTD Avg: 61.6%", accent: "green" },
+    brands:        { label: "Brand/Buyer Mix %",      value: 37.7, unit: "%", lastMonth: 34.2, extra: "YTD Avg: 38.1%", accent: "amber" },
+    styleChange:   { label: "Style Change Over/Line", value: 4.0,  unit: "",  lastMonth: 2.4,  extra: "YTD Avg: 2.9",   accent: "teal" },
+    cutToShip:     { label: "Cut-to-Ship Ratio",      value: 0.97, unit: "",  lastMonth: 0.97, extra: "YTD Avg: 0.97",  accent: "amber" },
+    shortShipment: { label: "(-) Short Shipment",     value: 0.40, unit: "%", lastMonth: 0.34, extra: "YTD Avg: 0.36%", accent: "rose" },
+    planAchievement: { label: "Plan Achievement",     value: 97.4, unit: "%", hero: true, accent: "green",  extra: "YTD Avg: 99.4% · vs. production plan" },
+    productivity:    { label: "Productivity Surplus", value: 6.7,  unit: "%", hero: true, accent: "violet", extra: "YTD Avg: 8.7% · CM surplus/deficit" }
+  },
+  efficiencyTrend: [
+    { month: "Jan-26", monthly: 64.0, ytd: 64.0, target: 65 },
+    { month: "Feb-26", monthly: 64.8, ytd: 64.4, target: 65 },
+    { month: "Mar-26", monthly: 59.9, ytd: 62.9, target: 65 },
+    { month: "Apr-26", monthly: 57.6, ytd: 61.6, target: 65 }
+  ],
+  gauges: {
+    firstTimeInspection: { label: "First Time Inspection Pass Rate", value: 98.4, target: 95, max: 100 },
+    onTimeShipment:      { label: "On Time Shipment %",              value: 99.1, target: 98, max: 100 },
+    operatingMargin:     { label: "Operating Margin (EBITDA)",       value: 10.2, target: 12, max: 20 },
+    otdf:                { label: "OTDF %",                          value: 90.8, target: 95, max: 100 }
+  },
+  dhu: [
+    { label: "Sewing",    value: 1.37, color: "#4A7BD9" },
+    { label: "Cutting",   value: 1.02, color: "#F5B84D" },
+    { label: "Finishing", value: 0.74, color: "#8C7CF6" }
+  ],
+  minutesChart: [
+    { month: "Jan-26", earned: 132.3, available: 210.8 },
+    { month: "Feb-26", earned: 107.4, available: 168.4 },
+    { month: "Mar-26", earned: 91.3,  available: 152.1 },
+    { month: "Apr-26", earned: 131.7, available: 241.8 }
+  ],
+  units: [
+    { unit: "AFL", styleChangeOverLine: 1.49, productionShare: 4.6,  efficiency: 72.6, dhu: 3.27, otdf: 91.0 },
+    { unit: "DFL", styleChangeOverLine: 5.15, productionShare: 2.4,  efficiency: 53.3, dhu: 3.11, otdf: 90.8 },
+    { unit: "DRL", styleChangeOverLine: 2.77, productionShare: 21.6, efficiency: 57.1, dhu: 4.52, otdf: 93.0 },
+    { unit: "DGL", styleChangeOverLine: 3.74, productionShare: 39.6, efficiency: 54.7, dhu: 2.66, otdf: 88.5 },
+    { unit: "GGL", styleChangeOverLine: 1.59, productionShare: 31.8, efficiency: 70.0, dhu: 2.10, otdf: 90.5 }
+  ]
+};
+
+const ACCENTS = { green: '#3ED598', amber: '#F5B84D', teal: '#2FD9C4', violet: '#8C7CF6', rose: '#F2607A' };
+
+let currentData = null;
+
+async function loadData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, false);
+    if(res && res.value) return JSON.parse(res.value);
+  }catch(e){ /* no saved data yet */ }
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(DEFAULT_DATA), false);
+  }catch(e){ /* storage not active until published */ }
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+
+async function saveData(data){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+  }catch(e){ console.warn('Could not persist data:', e); }
+}
+
+// --- GAUGE (SVG) ---
+function polar(cx, cy, r, angleDeg){
+  const a = angleDeg * Math.PI/180;
+  return { x: cx + r*Math.sin(a), y: cy - r*Math.cos(a) };
+}
+function describeArc(cx, cy, r, startAngle, endAngle){
+  const start = polar(cx, cy, r, startAngle);
+  const end = polar(cx, cy, r, endAngle);
+  const largeArc = (endAngle - startAngle) <= 180 ? 0 : 1;
+  return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+}
+function gaugeSVG(value, max, target, colorAccent){
+  const cx = 100, cy = 92, r = 74;
+  const frac = Math.max(0, Math.min(1, value/max));
+  const valueAngle = -90 + frac*180;
+  const targetFrac = Math.max(0, Math.min(1, target/max));
+  const targetAngle = -90 + targetFrac*180;
+  const z1 = -90 + 0.60*180;
+  const z2 = -90 + 0.85*180;
+  const trackWidth = 14;
+  const needleColor = ACCENTS[colorAccent] || '#2FD9C4';
+  return `
+  <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="${describeArc(cx,cy,r,-90,z1)}" stroke="#F2607A" stroke-width="${trackWidth}" fill="none" stroke-linecap="butt" opacity="0.35"/>
+    <path d="${describeArc(cx,cy,r,z1,z2)}" stroke="#F5B84D" stroke-width="${trackWidth}" fill="none" stroke-linecap="butt" opacity="0.4"/>
+    <path d="${describeArc(cx,cy,r,z2,90)}" stroke="#3ED598" stroke-width="${trackWidth}" fill="none" stroke-linecap="butt" opacity="0.45"/>
+    <path d="${describeArc(cx,cy,r,-90,valueAngle)}" stroke="${needleColor}" stroke-width="${trackWidth}" fill="none" stroke-linecap="round"/>
+    <line x1="${polar(cx,cy,10,targetAngle).x}" y1="${polar(cx,cy,10,targetAngle).y}"
+          x2="${polar(cx,cy,r+10,targetAngle).x}" y2="${polar(cx,cy,r+10,targetAngle).y}"
+          stroke="#E7ECF7" stroke-width="2" stroke-dasharray="3,3" opacity="0.6"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="${needleColor}"/>
+    <line x1="${cx}" y1="${cy}" x2="${polar(cx,cy,r-18,valueAngle).x}" y2="${polar(cx,cy,r-18,valueAngle).y}"
+          stroke="${needleColor}" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function renderGauge(container, g, accent){
+  const wrap = document.createElement('div');
+  wrap.className = 'gauge-cell';
+  wrap.style.setProperty('--accent', ACCENTS[accent]);
+  wrap.innerHTML = `
+    <div class="g-label">${g.label}</div>
+    ${gaugeSVG(g.value, g.max, g.target, accent)}
+    <div class="gauge-value" style="color:${ACCENTS[accent]}">${g.value}${g.max===100?'%':''}</div>
+    <div class="gauge-target">Target: ${g.target}${g.max===100?'%':''}</div>
+  `;
+  container.appendChild(wrap);
+}
+
+// --- SVG CHARTS ---
+function niceMax(v){
+  if(v <= 0) return 10;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const norm = v / mag;
+  let nice;
+  if(norm <= 1) nice = 1; else if(norm <= 2) nice = 2; else if(norm <= 5) nice = 5; else nice = 10;
+  return nice * mag;
+}
+function niceTicks(max, count){
+  const ticks = [];
+  for(let i = 0; i <= count; i++) ticks.push(Math.round((max * i / count) * 10) / 10);
+  return ticks;
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function comboChartSVG(rows){
+  const W = 620, H = 260, padL = 34, padR = 10, padT = 26, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = rows.length;
+  const allVals = rows.flatMap(r => [r.monthly, r.ytd, r.target]);
+  const maxV = niceMax(Math.max(...allVals) * 1.15);
+  const y = v => padT + plotH - (v / maxV) * plotH;
+  const step = plotW / n;
+  const bw = step * 0.42;
+  const xCenter = i => padL + step * i + step / 2;
+
+  const ticks = niceTicks(maxV, 4);
+  let gridSvg = ticks.map(t => `
+    <line x1="${padL}" y1="${y(t)}" x2="${W-padR}" y2="${y(t)}" stroke="#232B41" stroke-width="1"/>
+    <text x="${padL-6}" y="${y(t)+3}" text-anchor="end" font-size="9.5" fill="#8B93AA" font-family="var(--font-mono, monospace)">${t}</text>
+  `).join('');
+
+  let barsSvg = rows.map((r,i) => {
+    const x = xCenter(i) - bw/2;
+    const yv = y(r.monthly);
+    return `
+      <rect x="${x.toFixed(1)}" y="${yv.toFixed(1)}" width="${bw.toFixed(1)}" height="${(padT+plotH-yv).toFixed(1)}" rx="3" fill="${ACCENTS.teal}" opacity="0.4"/>
+      <text x="${xCenter(i).toFixed(1)}" y="${(yv-6).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="${ACCENTS.teal}" font-weight="600" font-family="var(--font-mono, monospace)">${r.monthly}</text>
+    `;
+  }).join('');
+
+  function linePath(key){
+    return rows.map((r,i) => `${i===0?'M':'L'} ${xCenter(i).toFixed(1)} ${y(r[key]).toFixed(1)}`).join(' ');
+  }
+  const ytdLine = `<path d="${linePath('ytd')}" fill="none" stroke="${ACCENTS.green}" stroke-width="2.2" stroke-linejoin="round"/>`;
+  const ytdDots = rows.map((r,i) => `
+    <circle cx="${xCenter(i).toFixed(1)}" cy="${y(r.ytd).toFixed(1)}" r="3" fill="${ACCENTS.green}"/>
+    <text x="${xCenter(i).toFixed(1)}" y="${(y(r.ytd)-9).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="${ACCENTS.green}" font-weight="600" font-family="var(--font-mono, monospace)">${r.ytd}</text>
+  `).join('');
+  const targetLine = `<path d="${linePath('target')}" fill="none" stroke="${ACCENTS.rose}" stroke-width="1.5" stroke-dasharray="4,4"/>`;
+
+  const xLabels = rows.map((r,i) => `<text x="${xCenter(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#8B93AA" font-family="var(--font-mono, monospace)">${esc(r.month)}</text>`).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    ${gridSvg}
+    ${barsSvg}
+    ${targetLine}
+    ${ytdLine}
+    ${ytdDots}
+    ${xLabels}
+  </svg>`;
+}
+
+function donutChartSVG(segments){
+  const size = 240, cx = size/2, cy = size/2 - 6, r = 66, sw = 24;
+  const total = segments.reduce((a,s) => a + s.value, 0) || 1;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+
+  const arcs = [];
+  const labels = [];
+  segments.forEach(s => {
+    const frac = s.value / total;
+    const len = frac * circumference;
+    const dash = `${len.toFixed(2)} ${(circumference-len).toFixed(2)}`;
+    const dashoffset = -offset;
+    const midFrac = (offset + len/2) / circumference;
+    offset += len;
+
+    arcs.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${sw}"
+      stroke-dasharray="${dash}" stroke-dashoffset="${dashoffset.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`);
+
+    const angleDeg = midFrac * 360;
+    const labelR = r + sw/2 + 20;
+    const lx = cx + labelR * Math.sin(angleDeg * Math.PI/180);
+    const ly = cy - labelR * Math.cos(angleDeg * Math.PI/180);
+    const anchor = Math.sin(angleDeg*Math.PI/180) > 0.15 ? 'start' : (Math.sin(angleDeg*Math.PI/180) < -0.15 ? 'end' : 'middle');
+    const innerR = r;
+    const ix = cx + innerR * Math.sin(angleDeg * Math.PI/180);
+    const iy = cy - innerR * Math.cos(angleDeg * Math.PI/180);
+    labels.push(`
+      <line x1="${ix.toFixed(1)}" y1="${iy.toFixed(1)}" x2="${(cx + (r+sw/2+6) * Math.sin(angleDeg*Math.PI/180)).toFixed(1)}" y2="${(cy - (r+sw/2+6) * Math.cos(angleDeg*Math.PI/180)).toFixed(1)}" stroke="${s.color}" stroke-width="1" opacity="0.6"/>
+      <text x="${lx.toFixed(1)}" y="${(ly-3).toFixed(1)}" text-anchor="${anchor}" font-size="11" font-weight="700" fill="${s.color}" font-family="var(--font-display, sans-serif)">${s.value}%</text>
+      <text x="${lx.toFixed(1)}" y="${(ly+9).toFixed(1)}" text-anchor="${anchor}" font-size="9" fill="#8B93AA">${esc(s.label)}</text>
+    `);
+  });
+
+  const totalLabel = `<text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="19" font-weight="700" fill="#E7ECF7" font-family="var(--font-display, sans-serif)">${total.toFixed(1)}%</text>
+    <text x="${cx}" y="${cy+15}" text-anchor="middle" font-size="9.5" fill="#8B93AA">Total DHU</text>`;
+
+  return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1B2337" stroke-width="${sw}"/>
+    ${arcs.join('')}
+    ${labels.join('')}
+    ${totalLabel}
+  </svg>`;
+}
+
+// OVERLAPPING BARS with EQUAL WIDTH
+function equalWidthOverlapBarSVG(rows){
+  const W = 460, H = 230, padL = 34, padR = 10, padT = 26, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = rows.length;
+  const allVals = rows.flatMap(r => [r.earned, r.available]);
+  const maxV = niceMax(Math.max(...allVals) * 1.15);
+  const y = v => padT + plotH - (v / maxV) * plotH;
+  const step = plotW / n;
+  const barWidth = step * 0.44;
+
+  const ticks = niceTicks(maxV, 4);
+  let gridSvg = ticks.map(t => `
+    <line x1="${padL}" y1="${y(t)}" x2="${W-padR}" y2="${y(t)}" stroke="#232B41" stroke-width="1"/>
+    <text x="${padL-6}" y="${y(t)+3}" text-anchor="end" font-size="9.5" fill="#8B93AA" font-family="var(--font-mono, monospace)">${t}</text>
+  `).join('');
+
+  let barsSvg = '';
+  rows.forEach((r, i) => {
+    const centerX = padL + step * i + step/2;
+    const x = centerX - barWidth/2;
+    const yA = y(r.available);
+    const yE = y(r.earned);
+
+    barsSvg += `
+      <rect x="${x.toFixed(1)}" y="${yA.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(padT+plotH-yA).toFixed(1)}" rx="3" fill="#4A7BD9" opacity="0.35"/>
+      <rect x="${x.toFixed(1)}" y="${yE.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(padT+plotH-yE).toFixed(1)}" rx="2.5" fill="${ACCENTS.teal}"/>
+      <text x="${centerX.toFixed(1)}" y="${(yA-8).toFixed(1)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="#7C93C9" font-family="var(--font-mono, monospace)">${r.available}</text>
+      <text x="${centerX.toFixed(1)}" y="${(yE-5).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${ACCENTS.teal}" font-family="var(--font-mono, monospace)">${r.earned}</text>
+    `;
+  });
+
+  const xLabels = rows.map((r,i) => `<text x="${(padL + step*i + step/2).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#8B93AA" font-family="var(--font-mono, monospace)">${esc(r.month)}</text>`).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    ${gridSvg}
+    ${barsSvg}
+    ${xLabels}
+  </svg>`;
+}
+
+// --- RENDER ---
+function fmtKpiValue(k){
+  const prefix = k.prefix || '';
+  return `${prefix}${k.value}${k.unit || ''}`;
+}
+
+function chipClass(val, kind){
+  if(kind === 'efficiency'){
+    if(val >= 90) return 'green';
+    if(val >= 80) return 'amber';
+    return 'rose';
+  }
+  if(kind === 'dhu'){
+    if(val <= 70) return 'green';
+    if(val <= 85) return 'amber';
+    return 'rose';
+  }
+  if(kind === 'otdf'){
+    if(val >= 90) return 'green';
+    if(val >= 80) return 'amber';
+    return 'rose';
+  }
+  return 'amber';
+}
+
+function render(data){
+  currentData = data;
+
+  document.getElementById('hdrBrand').textContent = data.header.company;
+  document.getElementById('hdrView').textContent = data.header.view;
+  document.getElementById('hdrMonth').textContent = `Month: ${data.header.month}`;
+
+  const kpiRow = document.getElementById('kpiRow');
+  kpiRow.innerHTML = '';
+  Object.values(data.kpis).forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'kpi' + (k.hero ? ' hero' : '');
+    el.style.setProperty('--accent', ACCENTS[k.accent] || ACCENTS.teal);
+    el.innerHTML = `
+      <div class="label">${k.label}</div>
+      <div class="value">${fmtKpiValue(k)}${k.trendUp ? ' ↑' : ''}</div>
+      ${k.lastMonth !== undefined ? `<div class="meta">Last Month: ${k.prefix||''}${k.lastMonth}${k.unit||''}<br>${k.extra||''}</div>` : (k.extra ? `<div class="meta">${k.extra}</div>` : '')}
+    `;
+    kpiRow.appendChild(el);
+  });
+
+  document.getElementById('trendChart').innerHTML = comboChartSVG(data.efficiencyTrend);
+  document.getElementById('trendLegend').innerHTML = `
+    <span><span class="sw-dot" style="background:${ACCENTS.teal}"></span>Monthly %</span>
+    <span><span class="sw-line" style="background:${ACCENTS.green}"></span>YTD Avg %</span>
+    <span><span class="sw-line" style="background:${ACCENTS.rose};border-top:2px dashed ${ACCENTS.rose};background:none;"></span>Target %</span>
+  `;
+
+  document.getElementById('dhuChart').innerHTML = donutChartSVG(data.dhu);
+  const legend = document.getElementById('dhuLegend');
+  legend.innerHTML = data.dhu.map(d => `<span><span class="legend-dot" style="background:${d.color}"></span>${d.label} (${d.value}%)</span>`).join('');
+
+  const g1 = document.getElementById('gaugeRow1'); g1.innerHTML = '';
+  renderGauge(g1, data.gauges.firstTimeInspection, 'green');
+  renderGauge(g1, data.gauges.onTimeShipment, 'amber');
+
+  const g2 = document.getElementById('gaugeRow2'); g2.innerHTML = '';
+  renderGauge(g2, data.gauges.operatingMargin, 'teal');
+  renderGauge(g2, data.gauges.otdf, 'amber');
+
+  document.getElementById('minutesChart').innerHTML = equalWidthOverlapBarSVG(data.minutesChart);
+  document.getElementById('minutesLegend').innerHTML = `
+    <span><span class="sw-dot" style="background:${ACCENTS.teal}"></span>Earned Minutes</span>
+    <span><span class="sw-dot" style="background:#4A7BD9;opacity:0.5"></span>Available Minutes</span>
+  `;
+
+  const tbody = document.getElementById('unitTableBody');
+  tbody.innerHTML = data.units.map(u => `
+    <tr>
+      <td style="font-family:var(--font-display);font-weight:600;color:var(--ink)">${u.unit}</td>
+      <td>${u.styleChangeOverLine.toFixed(2)}</td>
+      <td>${u.productionShare.toFixed(1)}%</td>
+      <td><span class="chip ${chipClass(u.efficiency,'efficiency')}">${u.efficiency.toFixed(1)}%</span></td>
+      <td><span class="chip ${chipClass(u.dhu,'dhu')}">${u.dhu.toFixed(1)}%</span></td>
+      <td><span class="chip ${chipClass(u.otdf,'otdf')}">${u.otdf.toFixed(1)}%</span></td>
+    </tr>
+  `).join('');
+}
+
+// --- Excel Import ---
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function monthSortKey(label){
+  const m = String(label).trim();
+  const parts = m.split(/[-\/]/);
+  const mi = MONTH_NAMES.indexOf(parts[0].slice(0,3).replace(/^./, c => c.toUpperCase()));
+  const yr = parts[1] ? Number(parts[1]) : 0;
+  return yr * 12 + (mi === -1 ? 0 : mi);
+}
+
+function mean(arr){ return arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0; }
+function sum(arr){ return arr.reduce((a,b)=>a+b,0); }
+function num(v){ const n = Number(v); return isNaN(n) ? 0 : n; }
+function round1(v){ return Math.round(v*10)/10; }
+function round2(v){ return Math.round(v*100)/100; }
+
+function findFirstDataSheet(wb){
+  for(const name of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { range: 1, defval: "" });
+    const hasMonthPlant = rows.some(r => r.Month && r.Plant);
+    if(hasMonthPlant) return rows.filter(r => r.Month && r.Plant);
+  }
+  throw new Error('Could not find a sheet with "Month" and "Plant" columns. Keep the same layout as your original Monthly_Record file.');
+}
+
+function parseWorkbook(wb){
+  const rows = findFirstDataSheet(wb);
+
+  const req = ['Efficiency','No. of Brands/Buyers Handled','Style Change Over/Line','Cut-to-Ship Ratio',
+    '(-) Short Shipment','First Time Inspection Pass Rate','On Time Shipment %','Productivity- CM Surplus/(Deficit)',
+    'Plan Achievement','Available Minutes','Earned Minutes','Sewing DHU%','Cutting DHU %','Finishing DHU %',
+    'Operating Margin (EBITDA)','OTDF'];
+  const sample = rows[0];
+  const missing = req.filter(c => !(c in sample));
+  if(missing.length) throw new Error(`Missing expected column(s): ${missing.join(', ')}`);
+
+  const months = [...new Set(rows.map(r => String(r.Month)))].sort((a,b) => monthSortKey(a) - monthSortKey(b));
+  const latestMonth = months[months.length - 1];
+  const prevMonth = months.length > 1 ? months[months.length - 2] : latestMonth;
+  const latestRows = rows.filter(r => String(r.Month) === latestMonth);
+  const prevRows = rows.filter(r => String(r.Month) === prevMonth);
+
+  const col = (arr, key) => arr.map(r => num(r[key]));
+  const overallAvg = (key, pct=true) => round1(mean(col(rows, key)) * (pct ? 100 : 1));
+  const latestAvg = (key, pct=true) => round1(mean(col(latestRows, key)) * (pct ? 100 : 1));
+  const prevAvg = (key, pct=true) => round1(mean(col(prevRows, key)) * (pct ? 100 : 1));
+
+  const header = {
+    company: DEFAULT_DATA.header.company,
+    view: `Consolidated View (${new Set(rows.map(r=>r.Plant)).size} Units)`,
+    month: `${months[0]} – ${latestMonth} (YTD)`
+  };
+
+  const kpis = {
+    efficiency: { label: "Efficiency %", value: latestAvg('Efficiency'), unit: "%", lastMonth: prevAvg('Efficiency'), extra: `YTD Avg: ${overallAvg('Efficiency')}%`, accent: "green" },
+    brands: { label: "Brand/Buyer Mix %", value: latestAvg('No. of Brands/Buyers Handled'), unit: "%", lastMonth: prevAvg('No. of Brands/Buyers Handled'), extra: `YTD Avg: ${overallAvg('No. of Brands/Buyers Handled')}%`, accent: "amber" },
+    styleChange: { label: "Style Change Over/Line", value: round1(mean(col(latestRows,'Style Change Over/Line'))), unit: "", lastMonth: round1(mean(col(prevRows,'Style Change Over/Line'))), extra: `YTD Avg: ${round1(mean(col(rows,'Style Change Over/Line')))}`, accent: "teal" },
+    cutToShip: { label: "Cut-to-Ship Ratio", value: round2(mean(col(latestRows,'Cut-to-Ship Ratio'))), unit: "", lastMonth: round2(mean(col(prevRows,'Cut-to-Ship Ratio'))), extra: `YTD Avg: ${round2(mean(col(rows,'Cut-to-Ship Ratio')))}`, accent: "amber" },
+    shortShipment: { label: "(-) Short Shipment", value: latestAvg('(-) Short Shipment'), unit: "%", lastMonth: prevAvg('(-) Short Shipment'), extra: `YTD Avg: ${overallAvg('(-) Short Shipment')}%`, accent: "rose" },
+    planAchievement: { label: "Plan Achievement", value: latestAvg('Plan Achievement'), unit: "%", hero: true, accent: "green", extra: `YTD Avg: ${overallAvg('Plan Achievement')}% · vs. production plan` },
+    productivity: { label: "Productivity Surplus", value: latestAvg('Productivity- CM Surplus/(Deficit)'), unit: "%", hero: true, accent: "violet", extra: `YTD Avg: ${overallAvg('Productivity- CM Surplus/(Deficit)')}% · CM surplus/deficit` }
+  };
+
+  const efficiencyTrend = [];
+  let cumVals = [];
+  months.forEach(m => {
+    const mRows = rows.filter(r => String(r.Month) === m);
+    const monthly = round1(mean(col(mRows,'Efficiency')) * 100);
+    cumVals = cumVals.concat(col(mRows,'Efficiency'));
+    const ytd = round1(mean(cumVals) * 100);
+    efficiencyTrend.push({ month: m, monthly, ytd, target: DEFAULT_DATA.efficiencyTrend[0] ? DEFAULT_DATA.efficiencyTrend[0].target : 65 });
+  });
+
+  const gauges = {
+    firstTimeInspection: { label: "First Time Inspection Pass Rate", value: overallAvg('First Time Inspection Pass Rate'), target: 95, max: 100 },
+    onTimeShipment: { label: "On Time Shipment %", value: overallAvg('On Time Shipment %'), target: 98, max: 100 },
+    operatingMargin: { label: "Operating Margin (EBITDA)", value: overallAvg('Operating Margin (EBITDA)'), target: 12, max: 20 },
+    otdf: { label: "OTDF %", value: overallAvg('OTDF'), target: 95, max: 100 }
+  };
+
+  const dhu = [
+    { label: "Sewing", value: overallAvg('Sewing DHU%'), color: "#4A7BD9" },
+    { label: "Cutting", value: overallAvg('Cutting DHU %'), color: "#F5B84D" },
+    { label: "Finishing", value: overallAvg('Finishing DHU %'), color: "#8C7CF6" }
+  ];
+
+  const minutesChart = months.map(m => {
+    const mRows = rows.filter(r => String(r.Month) === m);
+    return {
+      month: m,
+      earned: round1(sum(col(mRows,'Earned Minutes')) / 1e6),
+      available: round1(sum(col(mRows,'Available Minutes')) / 1e6)
+    };
+  });
+
+  const plants = [...new Set(rows.map(r => String(r.Plant)))];
+  const totalEarned = sum(col(rows,'Earned Minutes'));
+  const units = plants.map(p => {
+    const pRows = rows.filter(r => String(r.Plant) === p);
+    return {
+      unit: p,
+      styleChangeOverLine: round2(mean(col(pRows,'Style Change Over/Line'))),
+      productionShare: round1(sum(col(pRows,'Earned Minutes')) / totalEarned * 100),
+      efficiency: round1(mean(col(pRows,'Efficiency')) * 100),
+      dhu: round2((mean(col(pRows,'Sewing DHU%')) + mean(col(pRows,'Cutting DHU %')) + mean(col(pRows,'Finishing DHU %'))) * 100),
+      otdf: round1(mean(col(pRows,'OTDF')) * 100)
+    };
+  });
+
+  return { header, kpis, efficiencyTrend, gauges, dhu, minutesChart, units };
+}
+
+function showUploadStatus(msg, isError){
+  const el = document.getElementById('uploadStatus');
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.className = 'upload-status ' + (isError ? 'error' : 'success');
+}
+
+document.getElementById('ownerToggle').addEventListener('click', () => {
+  document.getElementById('ownerControls').classList.toggle('visible');
+});
+
+// --- Excel upload with password ---
+document.getElementById('openExcel').addEventListener('click', () => {
+  const pwd = prompt('Enter admin password to upload Excel:');
+  if(pwd === 'iammukit') {
+    document.getElementById('excelInput').click();
+  } else if(pwd !== null) {
+    showUploadStatus('Incorrect password. Upload cancelled.', true);
+  }
+});
+
+document.getElementById('excelInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const parsed = parseWorkbook(wb);
+    await saveData(parsed);
+    render(parsed);
+    showUploadStatus(`Loaded "${file.name}" — dashboard updated from your Excel file.`, false);
+  }catch(err){
+    showUploadStatus(`Could not read that file: ${err.message}. Check it has the same columns as your original Monthly_Record file (Month, Plant, Efficiency, etc.).`, true);
+  }
+  e.target.value = '';
+});
+
+// --- Init ---
+(async function init(){
+  try{
+    const data = await loadData();
+    render(data);
+  }catch(e){
+    console.error('Falling back to default data:', e);
+    render(JSON.parse(JSON.stringify(DEFAULT_DATA)));
+  }
+})();
+</script>
+</body>
+</html>
