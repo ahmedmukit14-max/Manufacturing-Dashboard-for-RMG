@@ -14,6 +14,7 @@ app.add_middleware(  # type: ignore
 )
 
 MONGO_URI = "mongodb+srv://dgl_admin:startingmongo51402@cluster0.sqybkjv.mongodb.net/?appName=Cluster0"
+print("DEBUG: Using hardcoded MongoDB SRV URI")
 
 
 # ------------------------------------------------------------
