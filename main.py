@@ -1,26 +1,32 @@
 import os
-import re
 from collections import defaultdict
-from flask import Flask, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
-app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests from your frontend
+app = FastAPI()
 
-# --- 1. MongoDB Connection (via environment variable) ---
+# Enable CORS for your frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or restrict to your Vercel domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- 1. MongoDB Connection ---
 MONGO_URI = os.environ.get("MONGO_URI")
 if not MONGO_URI:
     raise ValueError("MONGO_URI environment variable not set!")
 
 client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
 db = client["dgl_db"]
-collection = db["monthly_records"]  # Make sure this matches your collection name
+collection = db["monthly_records"]  # adjust if your collection name differs
 
 
-# --- 2. Helpers to parse numbers from strings like "20%" or "0.132" ---
+# --- 2. Helpers (same as before) ---
 def parse_num(v):
-    """Convert any value (string, int, float) to a clean float."""
     if v is None or v == "":
         return 0.0
     if isinstance(v, str):
@@ -40,21 +46,13 @@ def parse_num(v):
     except (TypeError, ValueError):
         return 0.0
 
-
 def get_val(v, to_pct=False):
-    """Parse a value, and optionally multiply by 100 for percentage display."""
     n = parse_num(v)
     return n * 100.0 if to_pct else n
 
-
 def normalize_doc(doc):
-    """
-    Handle both flat column names and the nested "No" object for
-    "No. of Brands/Buyers Handled" (from some older Excel versions).
-    """
-    # Try flat field first
+    # Nested "No" field handling
     brands = doc.get("No. of Brands/Buyers Handled")
-    # Fallback to nested "No" -> " of Brands/Buyers Handled"
     if brands is None and "No" in doc and isinstance(doc["No"], dict):
         brands = doc["No"].get(" of Brands/Buyers Handled", 0)
     if brands is None:
@@ -63,13 +61,10 @@ def normalize_doc(doc):
     return {
         "month": doc.get("Month"),
         "plant": doc.get("Plant"),
-        # All values are returned in the unit expected by the frontend:
-        # - % values are multiplied by 100 (e.g., 98% -> 98.0)
-        # - ratios (Cut-to-Ship) remain as decimals (e.g., 0.98)
         "efficiency": get_val(doc.get("Efficiency"), to_pct=True),
-        "brands": get_val(brands, to_pct=True),          # e.g., 0.25 -> 25.0
+        "brands": get_val(brands, to_pct=True),
         "style_change": get_val(doc.get("Style Change Over/Line"), to_pct=False),
-        "cut_to_ship": get_val(doc.get("Cut-to-Ship Ratio"), to_pct=False),  # e.g., 98% -> 0.98
+        "cut_to_ship": get_val(doc.get("Cut-to-Ship Ratio"), to_pct=False),
         "short_shipment": get_val(doc.get("(-) Short Shipment"), to_pct=True),
         "first_time_inspection": get_val(doc.get("First Time Inspection Pass Rate"), to_pct=True),
         "on_time_shipment": get_val(doc.get("On Time Shipment %"), to_pct=True),
@@ -84,35 +79,28 @@ def normalize_doc(doc):
         "otdf": get_val(doc.get("OTDF"), to_pct=True),
     }
 
+def mean(vals):
+    return sum(vals) / len(vals) if vals else 0.0
 
-def mean(values):
-    if not values:
-        return 0.0
-    return sum(values) / len(values)
-
-
-def sum_values(values):
-    return sum(values)
+def sum_vals(vals):
+    return sum(vals)
 
 
-# --- 3. Main Endpoint ---
-@app.route("/dashboard-data", methods=["GET"])
-def dashboard_data():
-    # Fetch all documents
+# --- 3. Endpoint ---
+@app.get("/dashboard-data")
+async def dashboard_data():
     docs = list(collection.find())
     if not docs:
-        return jsonify({"status": "error", "message": "No data found in collection"}), 404
+        return {"status": "error", "message": "No data found"}
 
-    # Normalise each document
     rows = [normalize_doc(d) for d in docs]
 
-    # ---- Group by Month ----
+    # Group by month
     months_data = defaultdict(list)
     for r in rows:
         months_data[r["month"]].append(r)
 
-    # Sort months chronologically (assuming format "Jan-2026", etc.)
-    # We'll rely on simple string sorting, but better: map month to index
+    # Sort months chronologically
     month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     def sort_key(month_str):
@@ -128,16 +116,15 @@ def dashboard_data():
 
     latest_rows = months_data[latest_month]
     prev_rows = months_data[prev_month]
-    all_rows = rows  # full dataset
+    all_rows = rows
 
-    # ---- Helper: average a field for a set of rows ----
     def avg_field(rows_list, field):
         return mean([r[field] for r in rows_list])
 
     def sum_field(rows_list, field):
         return sum([r[field] for r in rows_list])
 
-    # ---- 3a. KPIs (latest vs previous) ----
+    # ---- KPIs ----
     kpis = {
         "efficiency": {
             "label": "Efficiency %",
@@ -197,7 +184,7 @@ def dashboard_data():
         }
     }
 
-    # ---- 3b. Efficiency Trend (monthly, YTD, target) ----
+    # ---- Efficiency Trend ----
     efficiency_trend = []
     cum_eff = []
     for m in sorted_months:
@@ -209,10 +196,10 @@ def dashboard_data():
             "month": m,
             "monthly": round(monthly_eff, 1),
             "ytd": round(ytd_eff, 1),
-            "target": 65.0   # Fixed target (can be made dynamic later)
+            "target": 65.0
         })
 
-    # ---- 3c. Gauges (overall YTD averages) ----
+    # ---- Gauges ----
     gauges = {
         "firstTimeInspection": {
             "label": "First Time Inspection Pass Rate",
@@ -240,14 +227,14 @@ def dashboard_data():
         }
     }
 
-    # ---- 3d. DHU breakdown ----
+    # ---- DHU ----
     dhu = [
         {"label": "Sewing", "value": round(avg_field(all_rows, "sewing_dhu"), 2), "color": "#4A7BD9"},
         {"label": "Cutting", "value": round(avg_field(all_rows, "cutting_dhu"), 2), "color": "#F5B84D"},
         {"label": "Finishing", "value": round(avg_field(all_rows, "finishing_dhu"), 2), "color": "#8C7CF6"}
     ]
 
-    # ---- 3e. Minutes Chart (millions) ----
+    # ---- Minutes Chart ----
     minutes_chart = []
     for m in sorted_months:
         m_rows = months_data[m]
@@ -259,7 +246,7 @@ def dashboard_data():
             "available": round(available, 1)
         })
 
-    # ---- 3f. Units (plant breakdown) ----
+    # ---- Units ----
     plants_data = defaultdict(list)
     for r in rows:
         plants_data[r["plant"]].append(r)
@@ -276,14 +263,13 @@ def dashboard_data():
             "otdf": round(avg_field(p_rows, "otdf"), 1)
         })
 
-    # ---- 3g. Header ----
+    # ---- Header ----
     header = {
         "company": "DEKKOISHO GROUP MANUFACTURING",
         "view": f"Consolidated View ({len(plants_data)} Units)",
         "month": f"{sorted_months[0]} – {latest_month} (YTD)"
     }
 
-    # ---- 4. Build final response ----
     data = {
         "header": header,
         "kpis": kpis,
@@ -294,10 +280,4 @@ def dashboard_data():
         "units": units
     }
 
-    return jsonify({"status": "success", "data": data})
-
-
-# --- 5. Start the server ---
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    return {"status": "success", "data": data}
