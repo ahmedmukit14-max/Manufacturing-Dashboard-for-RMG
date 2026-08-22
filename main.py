@@ -23,7 +23,9 @@ if not MONGO_URI:
 client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
 db = client["dgl_db"]
 collection = db["monthly_records"]  # adjust if your collection name differs
-
+print("DATABASE:", db.name)
+print("COLLECTION:", collection.name)
+print("DOCUMENT COUNT:", collection.count_documents({}))
 
 # --- 2. Helpers (same as before) ---
 def parse_num(v):
